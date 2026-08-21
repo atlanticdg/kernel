@@ -212,14 +212,17 @@ jobs:
       - name: Prepare custom DTS patch for rk3399-rockdd
         run: |
           echo "=== 生成 rk3399-rockdd DTS 补丁 ==="
-          mkdir -p kernel-patch
+
+          # 【关键】补丁必须放在 common-kernel-patches/ 子目录下
+          # ophub 的 armbian-kernel 脚本只查找这个子目录
+          mkdir -p kernel-patch/common-kernel-patches
 
           # 1. 下载 DTS 文件
           echo "下载 DTS..."
           wget -q -O /tmp/rk3399-rockdd.dts \
             "https://raw.githubusercontent.com/atlanticdg/u-boot-rock/main/dts/upstream/src/arm64/rockchip/rk3399-rockdd.dts"
 
-          # 2. 生成添加 DTS 文件的补丁
+          # 2. 生成添加 DTS 文件的补丁 (新文件)
           echo "生成 DTS 补丁..."
           {
             echo "diff --git a/arch/arm64/boot/dts/rockchip/rk3399-rockdd.dts b/arch/arm64/boot/dts/rockchip/rk3399-rockdd.dts"
@@ -229,29 +232,32 @@ jobs:
             LINE_COUNT=$(wc -l < /tmp/rk3399-rockdd.dts)
             echo "@@ -0,0 +1,${LINE_COUNT} @@"
             sed 's/^/+/' /tmp/rk3399-rockdd.dts
-          } > kernel-patch/001-add-rockdd-dts.patch
+          } > kernel-patch/common-kernel-patches/001-add-rockdd-dts.patch
 
           # 3. 生成修改 Makefile 的补丁
+          # 使用 rk3399-rock-pi-4a 和 4a-plus 作为上下文（在所有内核版本中都存在）
           echo "生成 Makefile 补丁..."
           {
             echo "diff --git a/arch/arm64/boot/dts/rockchip/Makefile b/arch/arm64/boot/dts/rockchip/Makefile"
             echo "--- a/arch/arm64/boot/dts/rockchip/Makefile"
             echo "+++ b/arch/arm64/boot/dts/rockchip/Makefile"
-            echo "@@ -1,1 +1,2 @@"
+            echo "@@ -70,3 +70,4 @@"
             echo " dtb-\$(CONFIG_ARCH_ROCKCHIP) += rk3399-rock-pi-4a.dtb"
+            echo " dtb-\$(CONFIG_ARCH_ROCKCHIP) += rk3399-rock-pi-4a-plus.dtb"
             echo "+dtb-\$(CONFIG_ARCH_ROCKCHIP) += rk3399-rockdd.dtb"
-          } > kernel-patch/002-add-rockdd-makefile.patch
+            echo " dtb-\$(CONFIG_ARCH_ROCKCHIP) += rk3399-rock-pi-4b.dtb"
+          } > kernel-patch/common-kernel-patches/002-add-rockdd-makefile.patch
 
           # 4. 验证
           echo ""
-          echo "=== 补丁文件列表 ==="
-          ls -la kernel-patch/
+          echo "=== 补丁目录结构 ==="
+          find kernel-patch/ -type f
           echo ""
           echo "=== Makefile 补丁内容 ==="
-          cat kernel-patch/002-add-rockdd-makefile.patch
+          cat kernel-patch/common-kernel-patches/002-add-rockdd-makefile.patch
           echo ""
           echo "=== DTS 补丁前5行 ==="
-          head -5 kernel-patch/001-add-rockdd-dts.patch
+          head -5 kernel-patch/common-kernel-patches/001-add-rockdd-dts.patch
 
       - name: Compile the kernel [ ${{ matrix.kernel_version }} ]
         uses: ophub/amlogic-s9xxx-armbian@main
